@@ -1,0 +1,3 @@
+C:/Users/henrik.pedersen/pico/rotbot/RotBot_UI/out/pioasm/CMakeFiles/pioasm.dir
+C:/Users/henrik.pedersen/pico/rotbot/RotBot_UI/out/pioasm/CMakeFiles/edit_cache.dir
+C:/Users/henrik.pedersen/pico/rotbot/RotBot_UI/out/pioasm/CMakeFiles/rebuild_cache.dir

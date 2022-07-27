@@ -1,0 +1,342 @@
+/* NT7534 LCD library! (for GTK-281)
+
+Copyright (C) 2016 Guy WEILER www.weigu.lu
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 2.1 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
+
+some of this code was written by <cstone@pobox.com> originally and
+some of this code was written by Limor Fried, Adafruit Industries
+it is in the public domain.  */
+// create logo with gimp (128x64) and save as *.xbm. Convert with xbm2NT7534.py
+#include "NT7534.h"
+
+uint8_t is_reversed = 0;
+
+// a handy reference to where the pages are on the screen
+const uint8_t pagemap[] = {3, 2, 1, 0, 7, 6, 5, 4};
+
+// a 5x7 font table
+// const uint8_t font[0] = {};
+
+NT7534::NT7534(Parallel8Bit interface): interface(std::move(interface))
+{
+    NT7534::interface = interface;
+}
+
+void NT7534::command(uint8_t c)
+{
+    gpio_put(NT7534::interface.data_sel, 0);
+    gpio_put(NT7534::interface.bit_0, c & 1);
+    gpio_put(NT7534::interface.bit_1, c & 2);
+    gpio_put(NT7534::interface.bit_2, c & 4);
+    gpio_put(NT7534::interface.bit_3, c & 8);
+    gpio_put(NT7534::interface.bit_4, c & 16);
+    gpio_put(NT7534::interface.bit_5, c & 32);
+    gpio_put(NT7534::interface.bit_6, c & 64);
+    gpio_put(NT7534::interface.bit_7, c & 128);
+    gpio_put(NT7534::interface.readwrite, 0);
+    gpio_put(NT7534::interface.enable, 1);
+    // sleep_us(1);
+    gpio_put(NT7534::interface.enable, 0);
+}
+
+void NT7534::datawrite(uint8_t c)
+{
+    gpio_put(NT7534::interface.data_sel, 1);
+    gpio_put(NT7534::interface.bit_0, c & 1);
+    gpio_put(NT7534::interface.bit_1, c & 2);
+    gpio_put(NT7534::interface.bit_2, c & 4);
+    gpio_put(NT7534::interface.bit_3, c & 8);
+    gpio_put(NT7534::interface.bit_4, c & 16);
+    gpio_put(NT7534::interface.bit_5, c & 32);
+    gpio_put(NT7534::interface.bit_6, c & 64);
+    gpio_put(NT7534::interface.bit_7, c & 128);
+    gpio_put(NT7534::interface.readwrite, 0);
+    gpio_put(NT7534::interface.enable, 1);
+    // sleep_us(1);
+    gpio_put(NT7534::interface.enable, 0);
+}
+
+uint8_t NT7534::dataread()
+{
+    gpio_put(NT7534::interface.data_sel, 1);
+    gpio_put(NT7534::interface.readwrite, 1);
+    gpio_put(NT7534::interface.enable, 0);
+    gpio_put(NT7534::interface.enable, 1);
+    NT7534::interface.set_direction(GPIO_IN);
+    // TODO make this not mess up at all
+    uint8_t res = 0;
+    res = res + 1 & gpio_get(NT7534::interface.bit_0);
+    res = res + 2 & gpio_get(NT7534::interface.bit_1);
+    res = res + 4 & gpio_get(NT7534::interface.bit_2);
+    res = res + 8 & gpio_get(NT7534::interface.bit_3);
+    res = res + 16 & gpio_get(NT7534::interface.bit_4);
+    res = res + 32 & gpio_get(NT7534::interface.bit_5);
+    res = res + 64 & gpio_get(NT7534::interface.bit_6);
+    res = res + 128 & gpio_get(NT7534::interface.bit_7);
+    NT7534::interface.set_direction(GPIO_OUT);
+    gpio_put(NT7534::interface.enable, 0);
+    return res;
+}
+
+void NT7534::init(void)
+{
+    gpio_set_dir(NT7534::interface.data_sel, GPIO_OUT);
+    gpio_set_dir(NT7534::interface.readwrite, GPIO_OUT);
+    gpio_set_dir(NT7534::interface.enable, GPIO_OUT);
+    gpio_set_dir(NT7534::interface.cs, GPIO_OUT);
+    gpio_set_dir(NT7534::interface.reset, GPIO_OUT);
+    gpio_put(NT7534::interface.enable, 0);
+    NT7534::interface.set_direction(GPIO_OUT);
+    gpio_put(NT7534::interface.reset, 0); // hardware reset the display
+    sleep_ms(100);
+    gpio_put(NT7534::interface.reset, 1);
+    sleep_ms(100);
+    command(CMD_SET_BIAS_7);              // LCD bias select
+    command(CMD_SET_ADC_NORMAL);          // ADC select
+    command(CMD_SET_COM_NORMAL);          // SHL select
+    command(CMD_SET_DISP_START_LINE);     // Initial display line
+    command(CMD_SET_POWER_CONTROL | 0x4); // turn on voltage converter
+    sleep_ms(50);                         // (VC=1, VR=0, VF=0)
+    command(CMD_SET_POWER_CONTROL | 0x6); // turn on voltage regulator
+    sleep_ms(50);                         // (VC=1, VR=1, VF=0)
+    command(CMD_SET_POWER_CONTROL | 0x7); // turn on voltage follower
+    sleep_ms(10);                         // (VC=1, VR=1, VF=1)
+    command(CMD_SET_RESISTOR_RATIO | 0x6);
+} // set lcd operating voltage
+
+// Para:val (5 bit) from 0x01 (small) to 0x3F (large)
+void NT7534::setbrightness(uint8_t val)
+{
+    command(CMD_SET_VOLUME_FIRST);
+    command(CMD_SET_VOLUME_SECOND | (val & 0x3f));
+}
+
+void NT7534::begin(uint8_t contrast)
+{
+    init();
+    command(CMD_DISPLAY_ON);
+    command(CMD_SET_ALLPTS_NORMAL);
+    setbrightness(contrast);
+}
+
+void NT7534::clear(void)
+{
+    uint8_t p, c;
+    for (p = 0; p < 8; p++)
+    {
+        command(CMD_SET_PAGE | pagemap[p]);
+        c = 0; // start at the beginning of the row
+        command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
+        command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
+        command(CMD_RMW);
+        for (c = 0; c <= LCDWIDTH; c++)
+        {
+            datawrite(0x00);
+        }
+        command(CMD_RMW_CLEAR);
+    }
+}
+
+void NT7534::setall(void)
+{
+    uint8_t p, c;
+    for (p = 0; p < 8; p++)
+    {
+        command(CMD_SET_PAGE | pagemap[p]);
+        c = 0; // start at the beginning of the row
+        command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
+        command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
+        command(CMD_RMW);
+        for (c = 0; c <= LCDWIDTH; c++)
+        {
+            datawrite(0xFF);
+        }
+        command(CMD_RMW_CLEAR);
+    }
+}
+
+void NT7534::setpixel(uint8_t x, uint8_t y, uint8_t color)
+{
+    if ((x > LCDWIDTH) || (y > LCDHEIGHT))
+        return;
+    uint8_t c = getbyte(x, y / 8);
+    command(CMD_SET_PAGE | pagemap[y / 8]);
+    command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    if (color)
+        datawrite(c | (0x80 >> (y % 8)));
+    else
+        datawrite(c & ~(0x80 >> (y % 8)));
+}
+
+void NT7534::setbyte(uint8_t x, uint8_t p, uint8_t b)
+{
+    command(CMD_SET_PAGE | pagemap[p]);
+    command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    datawrite(b);
+}
+
+bool NT7534::getpixel(uint8_t x, uint8_t y)
+{
+    uint8_t c;
+    command(CMD_SET_PAGE | pagemap[y / 8]);
+    command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    c = dataread(); // dummy read see datasheet
+    c = dataread();
+    if ((c & ((0x80 >> (y % 8)))) == 0)
+        return 0;
+    else
+        return 1;
+}
+
+uint8_t NT7534::getbyte(uint8_t x, uint8_t p)
+{
+    uint8_t c;
+    command(CMD_SET_PAGE | pagemap[p]);
+    command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    c = dataread(); // dummy read see datasheet
+    c = dataread();
+    return c;
+}
+
+void NT7534::drawline(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1, uint8_t color)
+{ // bresenham's algorithm - thx wikpedia
+    uint8_t steep = abs(y1 - y0) > abs(x1 - x0);
+    if (steep)
+    {
+        swap(x0, y0);
+        swap(x1, y1);
+    }
+    if (x0 > x1)
+    {
+        swap(x0, x1);
+        swap(y0, y1);
+    }
+    uint8_t dx, dy;
+    dx = x1 - x0;
+    dy = std::abs(y1 - y0);
+    int8_t err = dx / 2;
+    int8_t ystep;
+    if (y0 < y1)
+        ystep = 1;
+    else
+        ystep = -1;
+    for (; x0 <= x1; x0++)
+    {
+        if (steep)
+            setpixel(y0, x0, color);
+        else
+            setpixel(x0, y0, color);
+        err -= dy;
+        if (err < 0)
+        {
+            y0 += ystep;
+            err += dx;
+        }
+    }
+}
+
+void NT7534::drawrect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color)
+{
+    for (uint8_t i = x; i < x + w; i++)
+    {
+        setpixel(i, y, color);
+        setpixel(i, y + h - 1, color);
+    }
+    for (uint8_t i = y; i < y + h; i++)
+    {
+        setpixel(x, i, color);
+        setpixel(x + w - 1, i, color);
+    }
+}
+
+void NT7534::fillrect(uint8_t x, uint8_t y, uint8_t w, uint8_t h, uint8_t color)
+{
+    for (uint8_t i = x; i < x + w; i++)
+    {
+        for (uint8_t j = y; j < y + h; j++)
+            setpixel(i, j, color);
+    }
+}
+
+void NT7534::drawcircle(uint8_t x0, uint8_t y0, uint8_t r, uint8_t color)
+{
+    int8_t f = 1 - r;
+    int8_t ddF_x = 1;
+    int8_t ddF_y = -2 * r;
+    int8_t x = 0;
+    int8_t y = r;
+    setpixel(x0, y0 + r, color);
+    setpixel(x0, y0 - r, color);
+    setpixel(x0 + r, y0, color);
+    setpixel(x0 - r, y0, color);
+    while (x < y)
+    {
+        if (f >= 0)
+        {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+        setpixel(x0 + x, y0 + y, color);
+        setpixel(x0 - x, y0 + y, color);
+        setpixel(x0 + x, y0 - y, color);
+        setpixel(x0 - x, y0 - y, color);
+        setpixel(x0 + y, y0 + x, color);
+        setpixel(x0 - y, y0 + x, color);
+        setpixel(x0 + y, y0 - x, color);
+        setpixel(x0 - y, y0 - x, color);
+    }
+}
+
+void NT7534::fillcircle(uint8_t x0, uint8_t y0, uint8_t r, uint8_t color)
+{
+    int8_t f = 1 - r;
+    int8_t ddF_x = 1;
+    int8_t ddF_y = -2 * r;
+    int8_t x = 0;
+    int8_t y = r;
+    for (uint8_t i = y0 - r; i <= y0 + r; i++)
+        setpixel(x0, i, color);
+    while (x < y)
+    {
+        if (f >= 0)
+        {
+            y--;
+            ddF_y += 2;
+            f += ddF_y;
+        }
+        x++;
+        ddF_x += 2;
+        f += ddF_x;
+        for (uint8_t i = y0 - y; i <= y0 + y; i++)
+        {
+            setpixel(x0 + x, i, color);
+            setpixel(x0 - x, i, color);
+        }
+        for (uint8_t i = y0 - x; i <= y0 + x; i++)
+        {
+            setpixel(x0 + y, i, color);
+            setpixel(x0 - y, i, color);
+        }
+    }
+}
