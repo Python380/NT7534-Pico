@@ -35,8 +35,6 @@ Ported to Raspberry Pi Pico by Henrik Pedersen in 2022
 #include <stdlib.h>
 #include <utility>
 
-#define SEND_DELAY_US 0
-
 #define swap(a, b)         \
       {                    \
             uint8_t t = a; \
@@ -109,6 +107,7 @@ public:
 
 private:
       Parallel8Bit interface;
+      // FrameBuffer frameBuffer;
 };
 
 #endif

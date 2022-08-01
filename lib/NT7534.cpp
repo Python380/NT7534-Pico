@@ -37,100 +37,38 @@ NT7534::NT7534(Parallel8Bit interface): interface(std::move(interface))
     NT7534::interface = interface;
 }
 
-void NT7534::command(uint8_t c)
-{
-    gpio_put(NT7534::interface.enable, 0);
-    gpio_put(NT7534::interface.data_sel, 0);
-    gpio_put(NT7534::interface.bit_0, c & 1);
-    gpio_put(NT7534::interface.bit_1, c & 2);
-    gpio_put(NT7534::interface.bit_2, c & 4);
-    gpio_put(NT7534::interface.bit_3, c & 8);
-    gpio_put(NT7534::interface.bit_4, c & 16);
-    gpio_put(NT7534::interface.bit_5, c & 32);
-    gpio_put(NT7534::interface.bit_6, c & 64);
-    gpio_put(NT7534::interface.bit_7, c & 128);
-    gpio_put(NT7534::interface.readwrite, 0);
-    gpio_put(NT7534::interface.enable, 1);
-    sleep_us(SEND_DELAY_US);
-}
-
-void NT7534::datawrite(uint8_t c)
-{
-    gpio_put(NT7534::interface.enable, 0);
-    gpio_put(NT7534::interface.data_sel, 1);
-    gpio_put(NT7534::interface.bit_0, c & 1);
-    gpio_put(NT7534::interface.bit_1, c & 2);
-    gpio_put(NT7534::interface.bit_2, c & 4);
-    gpio_put(NT7534::interface.bit_3, c & 8);
-    gpio_put(NT7534::interface.bit_4, c & 16);
-    gpio_put(NT7534::interface.bit_5, c & 32);
-    gpio_put(NT7534::interface.bit_6, c & 64);
-    gpio_put(NT7534::interface.bit_7, c & 128);
-    gpio_put(NT7534::interface.readwrite, 0);
-    gpio_put(NT7534::interface.enable, 1);
-    sleep_us(SEND_DELAY_US);
-}
-
-uint8_t NT7534::dataread()
-{
-    gpio_put(NT7534::interface.data_sel, 1);
-    gpio_put(NT7534::interface.readwrite, 1);
-    gpio_put(NT7534::interface.enable, 0);
-    gpio_put(NT7534::interface.enable, 1);
-    NT7534::interface.set_direction(GPIO_IN);
-    // TODO make this not mess up at all
-    uint8_t res = 0;
-    res = res + 1 & gpio_get(NT7534::interface.bit_0);
-    res = res + 2 & gpio_get(NT7534::interface.bit_1);
-    res = res + 4 & gpio_get(NT7534::interface.bit_2);
-    res = res + 8 & gpio_get(NT7534::interface.bit_3);
-    res = res + 16 & gpio_get(NT7534::interface.bit_4);
-    res = res + 32 & gpio_get(NT7534::interface.bit_5);
-    res = res + 64 & gpio_get(NT7534::interface.bit_6);
-    res = res + 128 & gpio_get(NT7534::interface.bit_7);
-    NT7534::interface.set_direction(GPIO_OUT);
-    gpio_put(NT7534::interface.enable, 0);
-    return res;
-}
-
 void NT7534::init(void)
 {
-    gpio_set_dir(NT7534::interface.data_sel, GPIO_OUT);
-    gpio_set_dir(NT7534::interface.readwrite, GPIO_OUT);
-    gpio_set_dir(NT7534::interface.enable, GPIO_OUT);
-    gpio_set_dir(NT7534::interface.cs, GPIO_OUT);
-    gpio_set_dir(NT7534::interface.reset, GPIO_OUT);
-    gpio_put(NT7534::interface.enable, 0);  // !
     NT7534::interface.set_direction(GPIO_OUT);
-    gpio_put(NT7534::interface.reset, 0); // hardware reset the display
+    NT7534::interface.set_reset(0);
     sleep_ms(100);
-    gpio_put(NT7534::interface.reset, 1);
+    NT7534::interface.set_reset(1);
     sleep_ms(100);
-    NT7534::command(CMD_SET_BIAS_7);              // LCD bias select
-    NT7534::command(CMD_SET_ADC_NORMAL);          // ADC select
-    NT7534::command(CMD_SET_COM_NORMAL);          // SHL select
-    NT7534::command(CMD_SET_DISP_START_LINE);     // Initial display line
-    NT7534::command(CMD_SET_POWER_CONTROL | 0x4); // turn on voltage converter
+    NT7534::interface.command(CMD_SET_BIAS_7);              // LCD bias select
+    NT7534::interface.command(CMD_SET_ADC_NORMAL);          // ADC select
+    NT7534::interface.command(CMD_SET_COM_NORMAL);          // SHL select
+    NT7534::interface.command(CMD_SET_DISP_START_LINE);     // Initial display line
+    NT7534::interface.command(CMD_SET_POWER_CONTROL | 0x4); // turn on voltage converter
     sleep_ms(50);                         // (VC=1, VR=0, VF=0)
-    NT7534::command(CMD_SET_POWER_CONTROL | 0x6); // turn on voltage regulator
+    NT7534::interface.command(CMD_SET_POWER_CONTROL | 0x6); // turn on voltage regulator
     sleep_ms(50);                         // (VC=1, VR=1, VF=0)
-    NT7534::command(CMD_SET_POWER_CONTROL | 0x7); // turn on voltage follower
+    NT7534::interface.command(CMD_SET_POWER_CONTROL | 0x7); // turn on voltage follower
     sleep_ms(10);                         // (VC=1, VR=1, VF=1)
-    NT7534::command(CMD_SET_RESISTOR_RATIO | 0x6);
+    NT7534::interface.command(CMD_SET_RESISTOR_RATIO | 0x6);
 } // set lcd operating voltage
 
 // Para:val (5 bit) from 0x01 (small) to 0x3F (large)
 void NT7534::setbrightness(uint8_t val)
 {
-    NT7534::command(CMD_SET_VOLUME_FIRST);
-    NT7534::command(CMD_SET_VOLUME_SECOND | (val & 0x3f));
+    NT7534::interface.command(CMD_SET_VOLUME_FIRST);
+    NT7534::interface.command(CMD_SET_VOLUME_SECOND | (val & 0x3f));
 }
 
 void NT7534::begin(uint8_t contrast)
 {
     NT7534::init();
-    NT7534::command(CMD_DISPLAY_ON);
-    NT7534::command(CMD_SET_ALLPTS_NORMAL);
+    NT7534::interface.command(CMD_DISPLAY_ON);
+    NT7534::interface.command(CMD_SET_ALLPTS_NORMAL);
     NT7534::setbrightness(contrast);
 }
 
@@ -139,16 +77,16 @@ void NT7534::clear(void)
     uint8_t p, c;
     for (p = 0; p < 8; p++)
     {
-        NT7534::command(CMD_SET_PAGE | pagemap[p]);
+        NT7534::interface.command(CMD_SET_PAGE | pagemap[p]);
         c = 0; // start at the beginning of the row
-        NT7534::command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
-        NT7534::command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
-        NT7534::command(CMD_RMW);
+        NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
+        NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
+        NT7534::interface.command(CMD_RMW);
         for (c = 0; c <= LCDWIDTH; c++)
         {
-            NT7534::datawrite(0x00);
+            NT7534::interface.dataWrite(0x00);
         }
-        NT7534::command(CMD_RMW_CLEAR);
+        NT7534::interface.command(CMD_RMW_CLEAR);
     }
 }
 
@@ -157,16 +95,16 @@ void NT7534::setall(void)
     uint8_t p, c;
     for (p = 0; p < 8; p++)
     {
-        NT7534::command(CMD_SET_PAGE | pagemap[p]);
+        NT7534::interface.command(CMD_SET_PAGE | pagemap[p]);
         c = 0; // start at the beginning of the row
-        NT7534::command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
-        NT7534::command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
-        NT7534::command(CMD_RMW);
+        NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((c + 1) & 0x0f));
+        NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((c + 1) >> 4) & 0x0f));
+        NT7534::interface.command(CMD_RMW);
         for (c = 0; c <= LCDWIDTH; c++)
         {
-            NT7534::datawrite(0xFF);
+            NT7534::interface.dataWrite(0xFF);
         }
-        NT7534::command(CMD_RMW_CLEAR);
+        NT7534::interface.command(CMD_RMW_CLEAR);
     }
 }
 
@@ -175,31 +113,31 @@ void NT7534::setpixel(uint8_t x, uint8_t y, uint8_t color)
     if ((x > LCDWIDTH) || (y > LCDHEIGHT))
         return;
     uint8_t c = getbyte(x, y / 8);
-    NT7534::command(CMD_SET_PAGE | pagemap[y / 8]);
-    NT7534::command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
-    NT7534::command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    NT7534::interface.command(CMD_SET_PAGE | pagemap[y / 8]);
+    NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
     if (color)
-        NT7534::datawrite(c | (0x80 >> (y % 8)));
+        NT7534::interface.dataWrite(c | (0x80 >> (y % 8)));
     else
-        NT7534::datawrite(c & ~(0x80 >> (y % 8)));
+        NT7534::interface.dataWrite(c & ~(0x80 >> (y % 8)));
 }
 
 void NT7534::setbyte(uint8_t x, uint8_t p, uint8_t b)
 {
-    NT7534::command(CMD_SET_PAGE | pagemap[p]);
-    NT7534::command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
-    NT7534::command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
-    NT7534::datawrite(b);
+    NT7534::interface.command(CMD_SET_PAGE | pagemap[p]);
+    NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    NT7534::interface.dataWrite(b);
 }
 
 bool NT7534::getpixel(uint8_t x, uint8_t y)
 {
     uint8_t c;
-    NT7534::command(CMD_SET_PAGE | pagemap[y / 8]);
-    NT7534::command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
-    NT7534::command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
-    c = NT7534::dataread(); // dummy read see datasheet
-    c = NT7534::dataread();
+    NT7534::interface.command(CMD_SET_PAGE | pagemap[y / 8]);
+    NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    c = NT7534::interface.dataRead(); // dummy read see datasheet
+    c = NT7534::interface.dataRead();
     if ((c & ((0x80 >> (y % 8)))) == 0)
         return 0;
     else
@@ -209,11 +147,11 @@ bool NT7534::getpixel(uint8_t x, uint8_t y)
 uint8_t NT7534::getbyte(uint8_t x, uint8_t p)
 {
     uint8_t c;
-    NT7534::command(CMD_SET_PAGE | pagemap[p]);
-    NT7534::command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
-    NT7534::command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
-    c = NT7534::dataread(); // dummy read see datasheet
-    c = NT7534::dataread();
+    NT7534::interface.command(CMD_SET_PAGE | pagemap[p]);
+    NT7534::interface.command(CMD_SET_COLUMN_LOWER | ((x + 1) & 0xf));
+    NT7534::interface.command(CMD_SET_COLUMN_UPPER | (((x + 1) >> 4) & 0xf));
+    c = NT7534::interface.dataRead(); // dummy read see datasheet
+    c = NT7534::interface.dataRead();
     return c;
 }
 
