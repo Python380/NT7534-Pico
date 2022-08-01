@@ -22,6 +22,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 some of this code was written by <cstone@pobox.com> originally and
 some of this code was written by Limor Fried, Adafruit Industries
 it is in the public domain.
+
+Ported to Raspberry Pi Pico by Henrik Pedersen in 2022
 */
 
 #ifndef LIB_NT7534_H
@@ -33,7 +35,7 @@ it is in the public domain.
 #include <stdlib.h>
 #include <utility>
 
-#define SEND_DELAY_US 120
+#define SEND_DELAY_US 0
 
 #define swap(a, b)         \
       {                    \

@@ -18,7 +18,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 some of this code was written by <cstone@pobox.com> originally and
 some of this code was written by Limor Fried, Adafruit Industries
-it is in the public domain.  */
+it is in the public domain.
+
+Ported to Raspberry Pi Pico by Henrik Pedersen in 2022
+*/
 #include "NT7534.h"
 
 uint8_t is_reversed = 0;
@@ -34,7 +37,7 @@ NT7534::NT7534(Parallel8Bit interface): interface(std::move(interface))
     NT7534::interface = interface;
 }
 
-void NT7534::NT7534::command(uint8_t c)
+void NT7534::command(uint8_t c)
 {
     gpio_put(NT7534::interface.enable, 0);
     gpio_put(NT7534::interface.data_sel, 0);
@@ -51,7 +54,7 @@ void NT7534::NT7534::command(uint8_t c)
     sleep_us(SEND_DELAY_US);
 }
 
-void NT7534::NT7534::datawrite(uint8_t c)
+void NT7534::datawrite(uint8_t c)
 {
     gpio_put(NT7534::interface.enable, 0);
     gpio_put(NT7534::interface.data_sel, 1);
@@ -68,7 +71,7 @@ void NT7534::NT7534::datawrite(uint8_t c)
     sleep_us(SEND_DELAY_US);
 }
 
-uint8_t NT7534::NT7534::dataread()
+uint8_t NT7534::dataread()
 {
     gpio_put(NT7534::interface.data_sel, 1);
     gpio_put(NT7534::interface.readwrite, 1);
@@ -167,7 +170,7 @@ void NT7534::setall(void)
     }
 }
 
-void NT7534::NT7534::setpixel(uint8_t x, uint8_t y, uint8_t color)
+void NT7534::setpixel(uint8_t x, uint8_t y, uint8_t color)
 {
     if ((x > LCDWIDTH) || (y > LCDHEIGHT))
         return;
